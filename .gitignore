@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Builds / artifacts
+contract/target/
+dist/
+*.wasm
+!contract/release/*.wasm
+
+# Secrets — never commit
+server/.env
+web/.env
+web/.env.local
+
+# Runtime data
+server/data/
+
+# Local tooling
+.agents/
+stellar-cli.exe
+skills-lock.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
