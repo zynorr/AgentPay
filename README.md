@@ -2,7 +2,7 @@
 
 An AI agent payment gateway on Stellar testnet. The gateway answers a prompt
 only after the caller settles a micro-payment in native XLM, using the
-Machine Payments Protocol (MPP) — the payment layer behind the
+Machine Payments Protocol (MPP) - the payment layer behind the
 [x402](https://paymentauth.org) standard. Payments settle through the XLM
 Stellar Asset Contract (SEP-41) and are recorded on a Soroban contract.
 
@@ -13,30 +13,69 @@ the paywall.
 
 ## Architecture
 
-```
-Client                     Gateway (server/)                 Network
---------                   -----------------                 -------
-CLI agent      POST /api/ai/chat
-(mppx)  ---------------------------->  Express + @stellar/mpp
-                                        (stellar.charge method)
-Freighter
-wallet          <---------- 402 + WWW-Authenticate challenge
-                signs SEP-41 transfer (pull mode, XDR)
-                ------------>  Authorization: Payment <cred>
-                                         |
-                                         | verify transfer on-chain
-                                         | broadcast settlement
-                                         |   ------------------------->
-                                         |   Stellar testnet RPC
-                                         |
-                                         | generate AI response (Groq)
-                                         | record payment
-                                         |   -> local JSONL ledger
-                                         |   -> PaymentRegistry contract
-                <---------- 200 OK + Payment-Receipt (tx hash)
+The system is a pay-per-prompt service: clients must pay in XLM before the
+gateway serves an AI answer. Three layers cooperate: a **client** (browser or
+CLI agent), the **gateway** (`server/`), and **Stellar testnet** (the XLM SAC
+token contract, Soroban RPC, and the PaymentRegistry Soroban contract).
+
+### System overview
+
+```mermaid
+flowchart LR
+    subgraph Clients
+        C1[CLI agent<br/>@stellar/mpp + mppx]
+        C2[Browser<br/>React + Freighter]
+    end
+
+    subgraph Gateway
+        G[Express + @stellar/mpp<br/>charge mode]
+        A[AI provider client<br/>OpenAI-compatible]
+        L[JSONL ledger]
+        R[Registry client]
+    end
+
+    subgraph Stellar testnet
+        SAC[XLM SAC<br/>SEP-41]
+        PC[PaymentRegistry<br/>Soroban contract]
+        RPC[Soroban RPC]
+    end
+
+    P[AI provider<br/>Groq / Llama-3.3]
+
+    C1 -->|POST /api/ai/chat| G
+    C2 -->|POST /api/ai/chat| G
+    C1 -.->|signed transfer XDR| SAC
+    C2 -.->|signed transfer XDR| SAC
+    G -->|verify + settle| RPC
+    RPC --> SAC
+    G --> A --> P
+    G --> L
+    G --> R --> PC
 ```
 
-Three components implement the protocol:
+### Payment sequence
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant Gw as Gateway
+    participant St as Stellar
+    participant Ai as AI provider
+
+    C->>Gw: POST /api/ai/chat { prompt }
+    Gw-->>C: 402 + WWW-Authenticate: Payment challenge
+    C->>St: build, simulate, sign SAC transfer (pull mode)
+    C->>Gw: POST + Authorization: Payment <credential>
+    Gw->>St: verify transfer on-chain
+    St-->>Gw: valid, fresh, not replayed
+    Gw->>St: broadcast settlement
+    Gw->>Ai: generate response
+    Ai-->>Gw: answer
+    Gw->>St: record_payment (best effort)
+    Gw-->>C: 200 + Payment-Receipt (tx hash)
+```
+
+### Components
 
 | Component | What it does |
 |---|---|
@@ -85,7 +124,7 @@ docs/                    Protocol, architecture, troubleshooting
    `WWW-Authenticate: Payment ...` challenge containing the amount (base
    units), currency (XLM SAC contract id), recipient, and expiry.
 3. The client builds a SEP-41 `transfer` on the XLM SAC contract, simulates it
-   against testnet RPC, and signs the envelope — with Freighter in the browser
+   against testnet RPC, and signs the envelope - with Freighter in the browser
    or a keypair in the CLI agent. This is pull mode: the payer never hands over
    a secret; the signed XDR is the credential.
 4. The client retries with `Authorization: Payment <base64url credential>`.
@@ -222,11 +261,11 @@ Notes:
 
 `contract/src/lib.rs` implements `PaymentRegistry` (soroban-sdk 27):
 
-- `__constructor(admin)` — sets the gateway operator
-- `record_payment(payer, amount, request_id)` — admin-only; rejects non-positive
+- `__constructor(admin)` - sets the gateway operator
+- `record_payment(payer, amount, request_id)` - admin-only; rejects non-positive
   amounts; emits a `PaymentRecorded` event; maintains `Payments`, `Count`, and
   `TotalVolume` in instance storage
-- `payment_count()`, `total_volume()`, `payments()`, `payment(index)` — reads
+- `payment_count()`, `total_volume()`, `payments()`, `payment(index)` - reads
 
 Instance storage TTL is re-extended past a 30-day threshold to ~120 days on
 every write. The deployed wasm is preserved at `contract/release/`.
@@ -255,6 +294,6 @@ cargo test     # unit tests (non-Windows-GNU toolchains)
 
 ## Documentation
 
-- [docs/PROTOCOL.md](docs/PROTOCOL.md) — x402/MPP wire format and verification
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — component design and security model
-- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — common issues and fixes
+- [docs/PROTOCOL.md](docs/PROTOCOL.md) - x402/MPP wire format and verification
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - component design and security model
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - common issues and fixes
