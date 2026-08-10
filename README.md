@@ -202,7 +202,8 @@ node browser-client-test.mjs "your prompt"
 
 ## Configuration
 
-All configuration lives in `server/.env`, written by `npm run setup`.
+All configuration lives in `server/.env`, written by `npm run setup`. A
+commented template with every variable is kept at `server/.env.example`.
 
 | Variable | Purpose |
 |---|---|
