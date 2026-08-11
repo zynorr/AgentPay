@@ -106,16 +106,17 @@ server/                  Gateway backend
   src/ledger.js          JSONL payment ledger
   src/registry.js        On-chain recording client (contract calls)
   src/cli-agent.js       Demo agent using the official MPP client stack
+  setup-testnet.mjs      One-shot testnet bootstrap (self-contained, no CLI needed)
 web/                     React + Vite frontend
   src/App.jsx            Chat UI, payment stepper, wallet controls
   src/lib/paywall.js     Browser MPP client (wire format, no SDK)
   src/lib/stellar.js     Freighter + Stellar SDK helpers
   src/components/        SVG icons, markdown renderer
-scripts/
-  setup-testnet.mjs      One-shot testnet bootstrap
-stellar-cli.exe          Pinned Stellar CLI (v27.1.0)
 docs/                    Protocol, architecture, troubleshooting
 ```
+
+`stellar-cli.exe` is used only if you rebuild the contract from source; the
+setup and gateway run without it.
 
 ## How a request is paid for
 
@@ -143,8 +144,10 @@ See `docs/PROTOCOL.md` for the exact wire format.
 - Rust toolchain (only needed to rebuild the contract)
 - [Freighter](https://freighter.app) wallet for the browser demo
 
-The Stellar CLI ships as `stellar-cli.exe` in the repo root; no global install
-required.
+The Stellar CLI is only needed to rebuild the contract from source
+(`cd contract && ../stellar-cli.exe contract build`). The one-shot setup and
+the running gateway are fully self-contained - they use the committed wasm
+and the Stellar SDK, so no global install is required.
 
 ## Quick start
 

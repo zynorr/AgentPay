@@ -11,7 +11,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "agent": "node src/cli-agent.js",
-    "setup": "node ../scripts/setup-testnet.mjs"
+    "setup": "node setup-testnet.mjs"
   },
   "dependencies": {
     "@stellar/mpp": "0.7.1",
