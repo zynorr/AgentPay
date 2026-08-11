@@ -43,9 +43,14 @@ const wasmBytes = readFileSync(WASM);
 const server = new StellarSdk.rpc.Server(RPC_URL);
 
 async function fund(publicKey) {
-  const res = await fetch(`${FRIENDBOT}?addr=${publicKey}`);
-  if (!res.ok) {
-    throw new Error(`friendbot funding failed (${res.status}) for ${publicKey}`);
+  // Friendbot is rate-limited; retry a few times (CI runners share egress IPs).
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const res = await fetch(`${FRIENDBOT}?addr=${publicKey}`);
+    if (res.ok) return;
+    if (attempt === 5) {
+      throw new Error(`friendbot funding failed (${res.status}) for ${publicKey}`);
+    }
+    await new Promise((r) => setTimeout(r, 3000 * attempt));
   }
 }
 

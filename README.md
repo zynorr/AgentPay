@@ -1,5 +1,7 @@
 # AgentPay
 
+[![CI](https://github.com/zynorr/AgentPay/actions/workflows/ci.yml/badge.svg)](https://github.com/zynorr/AgentPay/actions/workflows/ci.yml)
+
 An AI agent payment gateway on Stellar testnet. The gateway answers a prompt
 only after the caller settles a micro-payment in native XLM, using the
 Machine Payments Protocol (MPP) - the payment layer behind the

@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A fresh checkout is the clean-clone proof: nothing is cached across runs,
+# so every run exercises the repo exactly as a new contributor would.
+
+jobs:
+  contract:
+    name: Contract tests (cargo test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Unit tests
+        working-directory: contract
+        run: cargo test --lib
+        # soroban-sdk testutils link only on non-Windows toolchains; Linux CI is
+        # the canonical place for these tests (see docs/TROUBLESHOOTING.md).
+
+  server:
+    name: Server - clean-clone setup + pay-to-answer E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      # Bootstrap from zero: fresh keypairs, friendbot funding, and a fresh
+      # PaymentRegistry deployment. No secrets required - everything is
+      # generated or public testnet infrastructure.
+      - name: Run testnet bootstrap (npm run setup)
+        working-directory: server
+        run: npm run setup
+
+      - name: Boot gateway and verify /api/health
+        working-directory: server
+        run: |
+          node src/index.js > /tmp/gateway.log 2>&1 &
+          GATEWAY_PID=$!
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4000/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -sf http://localhost:4000/api/health | tee /tmp/health.json
+          kill $GATEWAY_PID 2>/dev/null || true
+
+      # The definitive E2E: the CLI agent pays 0.05 XLM on testnet and only
+      # then receives a response. Requires the gateway from the previous step.
+      - name: Pay-to-answer E2E via CLI agent
+        working-directory: server
+        run: |
+          node src/index.js > /tmp/gateway-e2e.log 2>&1 &
+          GATEWAY_PID=$!
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4000/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          npm run agent -- "Say hello from CI in one short sentence." | tee /tmp/agent.out
+          kill $GATEWAY_PID 2>/dev/null || true
+          grep -q '"ok": true' /tmp/agent.out
+
+  web:
+    name: Web - build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build
+        working-directory: web
+        run: npm run build
